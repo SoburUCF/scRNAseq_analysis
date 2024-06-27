@@ -1,0 +1,114 @@
+---
+title: "10x demo scRNA seq data analysis"
+author: "Sobur Ali"
+date: "2024-06-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("hdf5r")
+```
+
+
+# Load required libraries
+```{r}
+library(Seurat)
+library(tidyverse)
+library(hdf5r)
+```
+
+Import data
+Data is downloaded from : https://www.10xgenomics.com/resources/datasets/10-k-human-pbm-cs-multiome-v-1-0-chromium-controller-1-standard-2-0-0         
+
+```{r}
+nsclc_data <- Read10X_h5(filename = 'data/20k_NSCLC_DTC_3p_nextgem_Multiplex_count_raw_feature_bc_matrix.h5')
+
+```
+Genome matrix has multiple modalities, returning a list of matrices for this genome
+```{r}
+str(nsclc_data)
+```
+As these dataset has 3 modalities, we only take the gene expression data
+
+```{r}
+gene_exp <-  nsclc_data$`Gene Expression`
+```
+
+Initialize the Seurat object with the raw
+```{r}
+nsclc.seurat.obj <- CreateSeuratObject(counts = gene_exp, project = "NSCLC", min.cells = 3, min.features = 200)
+str(nsclc.seurat.obj)
+nsclc.seurat.obj
+```
+
+## Quality Control
+
+```{r}
+View(nsclc.seurat.obj@meta.data)
+```
+
+Calculate the mitocontrial read
+
+```{r}
+nsclc.seurat.obj[["percent.mt"]] <- PercentageFeatureSet(nsclc.seurat.obj, pattern = "^MT-")
+View(nsclc.seurat.obj@meta.data)
+```
+
+Create a violin plot
+
+```{r}
+VlnPlot(nsclc.seurat.obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+Create a scatter plot for features vs counts 
+```{r}
+FeatureScatter(nsclc.seurat.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
+  geom_smooth(method = 'lm')
+
+```
+
+Filtering low quality cells
+-Remove Low-Quality Cells: Cells with very few detected features might be empty droplets or low-quality cells that could skew the analysis.
+-Remove Doublets/Multiplets: Cells with an unusually high number of detected features might be doublets or multiplets, which can also affect the analysis results.
+-Remove Stressed or Dead Cells: Cells with high mitochondrial content are often stressed or dying, and including them in the analysis could lead to misleading conclusions.
+Filtering Criteria:
+Keeps cells with more than 200 but fewer than 2500 detected features (nFeature_RNA).
+Keeps cells with less than 5% mitochondrial content (percent.mt).
+
+```{r}
+nsclc.seurat.obj <- subset(nsclc.seurat.obj, subset = nFeature_RNA > 250 & nFeature_RNA < 2500 & 
+                          percent.mt < 5)
+```
+
+Normalization of the data
+
+```{r}
+#nsclc.seurat.obj <- NormalizeData(nsclc.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+# OR as they are set by default
+nsclc.seurat.obj <- NormalizeData(nsclc.seurat.obj)
+str(nsclc.seurat.obj)
+```
+
+Identify highly variable features
+```{r}
+nsclc.seurat.obj <- FindVariableFeatures(nsclc.seurat.obj, selection.method = "vst", nfeatures = 2000)
+```
+# Identify the 10 most highly variable genes
+
+```{r}
+top10 <- head(VariableFeatures(nsclc.seurat.obj), 10)
+```
+
+Plot variable features
+
+```{r}
+plot1 <- VariableFeaturePlot(nsclc.seurat.obj)
+LabelPoints(plot = plot1, points = top10, repel = TRUE)
+```
+
+
+
+
