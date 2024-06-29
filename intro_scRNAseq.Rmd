@@ -8,22 +8,45 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+Installing four packages from Bioconductor
+```{r}
+BiocManager::install("AnnotationHub")
+BiocManager::install("ensembldb")
+BiocManager::install("multtest")
+BiocManager::install("glmGamPoi")
+```
+
 
 ```{r}
+install.packages("Matrix")
+install.packages("RCurl")
+install.packages("scales")
+install.packages("cowplot")
+install.packages("Seurat")
+install.packages("metap")
+```
+
+
+```{r}
+library(Seurat)
 library(tidyverse)
+library(Matrix)
+library(RCurl)
+library(scales)
+library(cowplot)
+library(metap)
+library(AnnotationHub)
+library(ensembldb)
+library(multtest)
+library(glmGamPoi)
 ```
 
 
-```{r cars}
-summary(cars)
+```{r}
+sessionInfo()
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
