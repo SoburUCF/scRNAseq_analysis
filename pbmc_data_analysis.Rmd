@@ -1,0 +1,232 @@
+---
+title: "pmbc"
+author: "Sobur Ali"
+date: "2024-07-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("devtools")
+devtools::install_github("immunogenomics/presto")
+```
+
+
+Import packages
+```{r}
+library(Seurat)
+library(SeuratObject)
+library(devtools)
+library(patchwork)
+library(tidyverse)
+
+```
+
+load 10x data
+```{r}
+pbmc.data <- Read10X("data/hg19/")
+```
+
+Create a SeuratObject with the data
+```{r}
+pbmc.obj <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+```
+
+
+```{r}
+head(pbmc.obj@meta.data, 5)
+```
+#QC and selecting cells
+Calculate the percentage of mitocondrial genes
+```{r}
+pbmc.obj[["percent.mt"]] <- PercentageFeatureSet(pbmc.obj, pattern = "^MT-")
+```
+
+Visualize QC metrics as a violin plot
+```{r}
+VlnPlot(pbmc.obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+FeatureScatter is typically used to visualize feature-feature relationships, but can be used
+for anything calculated by the object, i.e. columns in object metadata, PC scores etc.
+```{r}
+
+scplot1 <- FeatureScatter(pbmc.obj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+scplot2 <- FeatureScatter(pbmc.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+scplot1 + scplot2
+```
+
+Filter out the low quality data
+```{r}
+pbmc.obj <- subset(pbmc.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+#Normalizing the data
+A global-scaling normalization method “LogNormalize” that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result.
+
+```{r}
+pbmc.obj <- NormalizeData(pbmc.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+#pbmc.obj <- NormalizeData(pbmc.obj)
+```
+#Identification of highly variable features (feature selection)
+We next calculate a subset of features that exhibit high cell-to-cell variation in the dataset (i.e, they are highly expressed in some cells, and lowly expressed in others).
+
+```{r}
+pbmc.obj <- FindVariableFeatures(pbmc.obj, selection.method = "vst", nfeatures = 2000)
+```
+# Identify the 10 most highly variable genes
+
+```{r}
+
+
+top10_gene <- head(VariableFeatures(pbmc.obj), 10)
+
+```
+
+
+```{r}
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(pbmc.obj)
+LabelPoints(plot = plot1, points = top10_gene, repel = TRUE)
+
+```
+#Scaling the data
+Next, we apply a linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA. The ScaleData() function:
+
+Shifts the expression of each gene, so that the mean expression across cells is 0
+Scales the expression of each gene, so that the variance across cells is 1
+This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
+The results of this are stored in pbmc[["RNA"]]$scale.data
+By default, only variable features are scaled.
+You can specify the features argument to scale additional features
+
+```{r}
+all.genes <- rownames(pbmc.obj)
+```
+
+
+```{r}
+pbmc.obj <- ScaleData(pbmc.obj, features = all.genes)
+```
+##Cluster the cells
+```{r}
+pbmc.obj <- RunPCA(pbmc.obj, features = VariableFeatures(object = pbmc.obj))
+```
+
+
+```{r}
+ElbowPlot(pbmc.obj)
+```
+
+
+```{r}
+pbmc.obj <- FindNeighbors(pbmc.obj, dims = 1:10)
+```
+
+
+```{r}
+pbmc.obj <- FindClusters(pbmc.obj, resolution = 0.5)
+```
+Run non-linear dimensional resuction UMAP
+
+```{r}
+pbmc.obj <- RunUMAP(pbmc.obj, dims = 1:10)
+```
+
+
+```{r}
+DimPlot(pbmc.obj, reduction = "umap", label = TRUE)
+```
+#Finding differentially expressed features (cluster biomarkers)
+
+find all markers of cluster 0
+
+```{r}
+cluster0.markers <- FindMarkers(pbmc.obj, ident.1 = 0)
+head(cluster0.markers, n = 5)
+```
+```{r}
+VlnPlot(pbmc.obj, features = c("RPS12", "RPS6"))
+```
+
+```{r}
+cluster3.markers <- FindMarkers(pbmc.obj, ident.1 = 3)
+head(cluster3.markers, n = 5)
+```
+```{r}
+VlnPlot(pbmc.obj, features = c("CD79A", "TCL1A"))
+```
+Plot of raw count
+
+```{r}
+VlnPlot(pbmc.obj, features = c("CD79A", "RPS12"))
+```
+
+
+```{r}
+```
+
+
+
+
+find markers for every cluster compared to all remaining cells, report only the positiveones
+
+```{r}
+pbmc.markers <- FindAllMarkers(pbmc.obj, only.pos = TRUE)
+pbmc.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+```
+
+```{r}
+FeaturePlot(pbmc.obj, features = c("CCR7", "CD3D", "CD3E", "LEF1", "NOSIP", "PIK3IP1", "PRKCQ-AS1", "FHIT", "MAL"))
+```
+
+
+##Heatmap of top 5 genes
+DoHeatmap() generates an expression heatmap for given cells and features. In this case, we are plotting the top 5 markers for each cluster.
+
+
+```{r}
+pbmc.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top5
+```
+
+
+Create heatmap of top 5 genes in each cluster
+
+Viridis packages to change the color 
+```{r}
+#install.packages("viridis")
+library(viridis)
+```
+
+```{r}
+DoHeatmap(pbmc.obj, features = top5$gene) + scale_fill_viridis() +
+  theme(axis.text.y = element_text(size = 7, colour = "black")) +
+   guides(color = FALSE, fill = guide_colorbar(title = "Expression"))
+```
+
+
+#Assigning cell type identity to clusters
+
+```{r}
+new.cluster.ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", "FCGR3A+ Mono",
+    "NK", "DC", "Platelet")
+names(new.cluster.ids) <- levels(pbmc.obj)
+pbmc.obj <- RenameIdents(pbmc.obj, new.cluster.ids)
+DimPlot(pbmc.obj, reduction = "umap", label = TRUE, pt.size = 0.5)
+```
+```{r}
+```
+
+
+```{r}
+```
+
