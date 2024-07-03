@@ -9,10 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-install.packages("devtools")
-devtools::install_github("immunogenomics/presto")
-```
 
 
 Import packages
@@ -35,7 +31,7 @@ Create a SeuratObject with the data
 pbmc.obj <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
 ```
 
-
+See the data
 ```{r}
 head(pbmc.obj@meta.data, 5)
 ```
@@ -116,16 +112,16 @@ pbmc.obj <- ScaleData(pbmc.obj, features = all.genes)
 pbmc.obj <- RunPCA(pbmc.obj, features = VariableFeatures(object = pbmc.obj))
 ```
 
-
+Create a ElbowPlot to see the PC
 ```{r}
 ElbowPlot(pbmc.obj)
 ```
 
-
+Neighhors finding
 ```{r}
 pbmc.obj <- FindNeighbors(pbmc.obj, dims = 1:10)
 ```
-
+Fluster finding
 
 ```{r}
 pbmc.obj <- FindClusters(pbmc.obj, resolution = 0.5)
@@ -136,7 +132,7 @@ Run non-linear dimensional resuction UMAP
 pbmc.obj <- RunUMAP(pbmc.obj, dims = 1:10)
 ```
 
-
+Create the cluster 
 ```{r}
 DimPlot(pbmc.obj, reduction = "umap", label = TRUE)
 ```
@@ -148,6 +144,7 @@ find all markers of cluster 0
 cluster0.markers <- FindMarkers(pbmc.obj, ident.1 = 0)
 head(cluster0.markers, n = 5)
 ```
+Violit plot of listed genes to see the expression in each cluster
 ```{r}
 VlnPlot(pbmc.obj, features = c("RPS12", "RPS6"))
 ```
@@ -166,11 +163,6 @@ VlnPlot(pbmc.obj, features = c("CD79A", "RPS12"))
 ```
 
 
-```{r}
-```
-
-
-
 
 find markers for every cluster compared to all remaining cells, report only the positiveones
 
@@ -180,7 +172,7 @@ pbmc.markers %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1)
 ```
-
+Feature plot of multiple selected marker gene
 ```{r}
 FeaturePlot(pbmc.obj, features = c("CCR7", "CD3D", "CD3E", "LEF1", "NOSIP", "PIK3IP1", "PRKCQ-AS1", "FHIT", "MAL"))
 ```
@@ -207,6 +199,7 @@ Viridis packages to change the color
 library(viridis)
 ```
 
+Create a heatmap of top 5 genes of each class
 ```{r}
 DoHeatmap(pbmc.obj, features = top5$gene) + scale_fill_viridis() +
   theme(axis.text.y = element_text(size = 7, colour = "black")) +
@@ -223,10 +216,5 @@ names(new.cluster.ids) <- levels(pbmc.obj)
 pbmc.obj <- RenameIdents(pbmc.obj, new.cluster.ids)
 DimPlot(pbmc.obj, reduction = "umap", label = TRUE, pt.size = 0.5)
 ```
-```{r}
-```
 
-
-```{r}
-```
 
