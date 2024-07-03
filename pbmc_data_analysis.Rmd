@@ -2,7 +2,9 @@
 title: "pmbc"
 author: "Sobur Ali"
 date: "2024-07-02"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -148,11 +150,12 @@ Violit plot of listed genes to see the expression in each cluster
 ```{r}
 VlnPlot(pbmc.obj, features = c("RPS12", "RPS6"))
 ```
-
+Find marker genes in cluster 3
 ```{r}
 cluster3.markers <- FindMarkers(pbmc.obj, ident.1 = 3)
 head(cluster3.markers, n = 5)
 ```
+Violin plot of selected genes
 ```{r}
 VlnPlot(pbmc.obj, features = c("CD79A", "TCL1A"))
 ```
