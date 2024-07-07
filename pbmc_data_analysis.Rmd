@@ -1,25 +1,31 @@
 ---
-title: "pmbc"
+title: "PBMC scRNA sequence analysis"
 author: "Sobur Ali"
 date: "2024-07-02"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Import packages
 
-
-Import packages
+For Seurat data and object 
 ```{r}
 library(Seurat)
 library(SeuratObject)
 library(devtools)
 library(patchwork)
 library(tidyverse)
+```
+For Automatic annotation of cluster
+```{r}
+library(SingleR)
+library(celldex)
+library(pheatmap)
 ```
 
 load 10x data
@@ -36,7 +42,8 @@ See the data
 ```{r}
 head(pbmc.obj@meta.data, 5)
 ```
-#QC and selecting cells
+# Quality ControlC
+
 Calculate the percentage of mitocondrial genes
 ```{r}
 pbmc.obj[["percent.mt"]] <- PercentageFeatureSet(pbmc.obj, pattern = "^MT-")
@@ -61,45 +68,43 @@ Filter out the low quality data
 pbmc.obj <- subset(pbmc.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
 ```
 
-#Normalizing the data
+# Normalizing the data
 A global-scaling normalization method “LogNormalize” that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result.
 
 ```{r}
 pbmc.obj <- NormalizeData(pbmc.obj, normalization.method = "LogNormalize", scale.factor = 10000)
 #pbmc.obj <- NormalizeData(pbmc.obj)
 ```
-#Identification of highly variable features (feature selection)
+# Identification of highly variable features (feature selection)
 We next calculate a subset of features that exhibit high cell-to-cell variation in the dataset (i.e, they are highly expressed in some cells, and lowly expressed in others).
 
 ```{r}
 pbmc.obj <- FindVariableFeatures(pbmc.obj, selection.method = "vst", nfeatures = 2000)
 ```
-# Identify the 10 most highly variable genes
+## Identify the 10 most highly variable genes
 
 ```{r}
-
-
 top10_gene <- head(VariableFeatures(pbmc.obj), 10)
 
 ```
 
-
+Plot variable features to 10 with labels
 ```{r}
-# plot variable features with and without labels
 plot1 <- VariableFeaturePlot(pbmc.obj)
 LabelPoints(plot = plot1, points = top10_gene, repel = TRUE)
 
 ```
-#Scaling the data
-Next, we apply a linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA. The ScaleData() function:
+# caling the data
+A linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA. The ScaleData() function:
 
-Shifts the expression of each gene, so that the mean expression across cells is 0
-Scales the expression of each gene, so that the variance across cells is 1
-This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
-The results of this are stored in pbmc[["RNA"]]$scale.data
+* Shifts the expression of each gene, so that the mean expression across cells is 0
+* Scales the expression of each gene, so that the variance across cells is 1
+* This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate
 By default, only variable features are scaled.
 You can specify the features argument to scale additional features
 
+
+Take all genes
 ```{r}
 all.genes <- rownames(pbmc.obj)
 ```
@@ -108,7 +113,9 @@ Scaling data
 ```{r}
 pbmc.obj <- ScaleData(pbmc.obj, features = all.genes)
 ```
-##Cluster the cells
+# Clustering the cells
+
+Run Principal Component Analysis (PCA) on a Seurat object (pbmc.obj) using the variable features of that object
 ```{r}
 pbmc.obj <- RunPCA(pbmc.obj, features = VariableFeatures(object = pbmc.obj))
 ```
@@ -120,24 +127,23 @@ ElbowPlot(pbmc.obj)
 
 Neighhors finding
 ```{r}
-pbmc.obj <- FindNeighbors(pbmc.obj, dims = 1:10)
+pbmc.obj <- FindNeighbors(pbmc.obj, dims = 1:15)
 ```
-Fluster finding
-
+Cluster finding
 ```{r}
 pbmc.obj <- FindClusters(pbmc.obj, resolution = 0.5)
 ```
 Run non-linear dimensional resuction UMAP
 
 ```{r}
-pbmc.obj <- RunUMAP(pbmc.obj, dims = 1:10)
+pbmc.obj <- RunUMAP(pbmc.obj, dims = 1:15)
 ```
 
 Create the cluster 
 ```{r}
 DimPlot(pbmc.obj, reduction = "umap", label = TRUE)
 ```
-#Finding differentially expressed features (cluster biomarkers)
+# Finding differentially expressed features (cluster biomarkers)
 
 find all markers of cluster 0
 
@@ -161,7 +167,7 @@ VlnPlot(pbmc.obj, features = c("CD79A", "TCL1A"))
 Plot of raw count
 
 ```{r}
-VlnPlot(pbmc.obj, features = c("CD79A", "RPS12"))
+VlnPlot(pbmc.obj, features = c("FCGR2A", "RPS12"))
 ```
 
 
@@ -174,16 +180,18 @@ pbmc.markers %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1)
 ```
+```{r}
+FeaturePlot(pbmc.obj, features = c(IL32))
+```
+
 Feature plot of multiple selected marker gene
 ```{r}
-FeaturePlot(pbmc.obj, features = c("CCR7", "CD3D", "CD3E", "LEF1", "NOSIP", "PIK3IP1", "PRKCQ-AS1", "FHIT", "MAL"))
+FeaturePlot(pbmc.obj, features = c("CCR7", "CD3D", "CD3E", "LEF1", "NOSIP", "PIK3IP1", "PRKCQ-AS1", "FHIT", "MAL"), cols = c("grey", "red"))
 ```
 
 
-##Heatmap of top 5 genes
+## Heatmap of top 5 genes
 DoHeatmap() generates an expression heatmap for given cells and features. In this case, we are plotting the top 5 markers for each cluster.
-
-
 ```{r}
 pbmc.markers %>%
     group_by(cluster) %>%
@@ -203,20 +211,58 @@ library(viridis)
 
 Create a heatmap of top 5 genes of each class
 ```{r}
+pdf("figures/pbmc.heatmap.topgene.pdf")
 DoHeatmap(pbmc.obj, features = top5$gene) + scale_fill_viridis() +
   theme(axis.text.y = element_text(size = 7, colour = "black")) +
-   guides(color = FALSE, fill = guide_colorbar(title = "Expression"))
+   guides(color = FALSE, fill = guide_colorbar(title = "Expression")) 
+dev.off()
 ```
 
 
-#Assigning cell type identity to clusters
+# Assigning cell type identity to clusters
 
+### Cluster naming manually based on the marker of each cluster
 ```{r}
-new.cluster.ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", "FCGR3A+ Mono",
-    "NK", "DC", "Platelet")
+new.cluster.ids <- c("Naive\nCD4 T", "CD14+ Mono", "Memory\nCD4 T", "B Cell", "CD8 T", "FCGR3A+ Mono", "NK Cell", "DC", "Platelet")
 names(new.cluster.ids) <- levels(pbmc.obj)
-pbmc.obj <- RenameIdents(pbmc.obj, new.cluster.ids)
-DimPlot(pbmc.obj, reduction = "umap", label = TRUE, pt.size = 0.5)
+pbmc.obj.ano <- RenameIdents(pbmc.obj, new.cluster.ids)
 ```
 
+Annotate cluster and save the figure
+```{r}
+DimPlot(pbmc.obj.ano, reduction = "umap", label = TRUE, pt.size = 0.7) +
+    xlab("UMAP1") +
+  ylab("UMAP2")
+```
+
+## Autoannotation of cluster using SingleR
+
+Get the reference data using celldex function
+```{r}
+refer <- celldex::HumanPrimaryCellAtlasData()
+```
+
+Get the count data
+```{r}
+pbmc_counts <- GetAssayData(pbmc.obj, slot = 'counts')
+```
+
+Expression values are log counts (log normalized counts)
+Run SingleR (default mode)
+Default for SingleR is to perform annotation of each individual cell in the test dataset
+```{r}
+pred.tion <- SingleR(test = pbmc_counts,
+        ref = refer,
+        labels = refer$label.main)
+```
+
+Extract the main.label from the prediction and add them to the pbmc.obj 
+```{r}
+pbmc.obj$singleR.labels <- pred.tion$labels[match(rownames(pbmc.obj@meta.data), rownames(pred.tion))]
+```
+
+Create the auto annotated cluster plot
+```{r}
+DimPlot(pbmc.obj, reduction = 'umap', group.by = 'singleR.labels', label = TRUE)
+```
 
